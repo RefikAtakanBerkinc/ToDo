@@ -1,0 +1,685 @@
+﻿@page "/journal"
+@rendermode InteractiveServer
+@inject JournalService JournalService
+@inject IJSRuntime JSRuntime
+<style>
+    :root {
+        --primary-color: #3498db;
+        --secondary-color: #2ecc71;
+        --background-light: #f4f6f7;
+        --text-color: #2c3e50;
+        --border-color: #bdc3c7;
+    }
+
+    .journal-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 2rem;
+        background-color: white;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        border-radius: 12px;
+    }
+
+    .journal-header {
+        background-color: var(--primary-color);
+        color: white;
+        padding: 1rem;
+        border-radius: 8px;
+        margin-bottom: 2rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+        .journal-header h1 {
+            margin: 0;
+            font-weight: 300;
+        }
+
+    .calendar-section {
+        display: grid;
+        grid-template-columns: 1fr 1.5fr;
+        gap: 2rem;
+    }
+
+    .calendar-container {
+        background-color: var(--background-light);
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+
+    .calendar-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1.5rem;
+    }
+
+        .calendar-header h4 {
+            margin: 0;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+
+    .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 0.5rem;
+        text-align: center;
+    }
+
+        .calendar-grid > div {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 0.75rem;
+            border-radius: 6px;
+            transition: all 0.3s ease;
+        }
+
+    .calendar-day {
+        cursor: pointer;
+        color: var(--text-color);
+        font-weight: 500;
+    }
+
+        .calendar-day:hover {
+            background-color: rgba(52, 152, 219, 0.1);
+        }
+
+        .calendar-day.empty {
+            background-color: transparent;
+            cursor: default;
+        }
+
+        .calendar-day.today {
+            border: 2px solid var(--primary-color);
+            font-weight: bold;
+        }
+
+        .calendar-day.selected {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .calendar-day.has-entry {
+            background-color: var(--secondary-color);
+            color: white;
+        }
+
+    .journal-editor {
+        background-color: var(--background-light);
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+
+    .mood-selector {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+
+    .mood-emoji {
+        font-size: 2rem;
+        opacity: 0.5;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+        .mood-emoji:hover,
+        .mood-emoji.selected {
+            opacity: 1;
+            transform: scale(1.2);
+        }
+
+    .no-entry {
+        text-align: center;
+        padding: 3rem;
+        background-color: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+
+    .journal-entry {
+        background-color: white;
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+
+    /* Quill Editor Customization */
+    ::deep .ql-container {
+        min-height: 300px;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+    }
+
+    ::deep .ql-toolbar {
+        border-top-left-radius: 8px;
+        border-top-right-radius: 8px;
+        background-color: var(--background-light);
+    }
+
+    ::deep .ql-editor {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        line-height: 1.6;
+        font-size: 1rem;
+    }
+
+    /* Responsive Design */
+    @@media (max-width: 1024px) {
+        .calendar-section
+
+    {
+        grid-template-columns: 1fr;
+    }
+
+    }
+</style>
+
+
+
+
+
+<div class="container journal-container my-4">
+    <div class="journal-header">
+        <h1>Günlük</h1>
+    </div>
+
+    <div class="calendar-section d-flex gap-4">
+        <div class="calendar-container flex-grow-1 bg-light p-4 rounded-3 shadow-sm">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <button class="btn btn-sm btn-outline-secondary" @onclick="() => NavigateMonth(-1)">
+                    <i class="bi bi-chevron-left"></i>
+                </button>
+                <h4 class="mb-0">@CurrentMonthYear</h4>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="() => NavigateMonth(1)">
+                    <i class="bi bi-chevron-right"></i>
+                </button>
+            </div>
+
+            <div class="calendar-grid">
+                @foreach (var dayName in DayNames)
+                {
+                    <div class="fw-bold text-center">@dayName</div>
+                }
+                @foreach (var day in _calendarDays)
+                {
+                    <div class="calendar-day @GetDayClasses(day)"
+                         @onclick="() => SelectDate(day.Date)">
+                        @(day.Day > 0 ? day.Day.ToString() : "")
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="journal-editor flex-grow-1">
+            @if (_isLoading)
+            {
+                <div class="text-center my-5">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Yükleniyor...</span>
+                    </div>
+                </div>
+            }
+            else
+            {
+                @if (_canCreateEntry)
+                {
+                    <div>
+                        <h4>@_selectedDate.ToString("dd MMMM yyyy, dddd")</h4>
+                        <div id="journalEditorWrapper">
+                            <BlazoredTextEditor @ref="_editor">
+                                <ToolbarContent>
+                                    <select class="ql-header">
+                                        <option selected=""></option>
+                                        <option value="1"></option>
+                                        <option value="2"></option>
+                                        <option value="3"></option>
+                                    </select>
+                                    <span class="ql-formats">
+                                        <button class="ql-bold"></button>
+                                        <button class="ql-italic"></button>
+                                        <button class="ql-underline"></button>
+                                        <button class="ql-strike"></button>
+                                    </span>
+                                    <span class="ql-formats">
+                                        <select class="ql-color"></select>
+                                        <select class="ql-background"></select>
+                                    </span>
+                                    <span class="ql-formats">
+                                        <button class="ql-list" value="ordered"></button>
+                                        <button class="ql-list" value="bullet"></button>
+                                    </span>
+                                    <span class="ql-formats">
+                                        <button class="ql-link"></button>
+                                        <button class="ql-image"></button>
+                                        <button class="ql-blockquote"></button>
+                                    </span>
+                                </ToolbarContent>
+                            </BlazoredTextEditor>
+                        </div>
+
+                        <div class="mood-selector mt-3">
+                            <span>Bugünkü ruh halin:</span>
+                            @foreach (var (mood, emoji, title) in new[] { 
+                                ("happy", "😊", "Mutlu"), 
+                                ("calm", "😌", "Sakin"), 
+                                ("sad", "😔", "Üzgün"), 
+                                ("excited", "😃", "Heyecanlı"), 
+                                ("tired", "😴", "Yorgun") 
+                            })
+                            {
+                                <span class="mood-emoji @(_selectedMood == mood ? "selected" : "")" 
+                                      @onclick='() => SetMood(mood)' 
+                                      title="@title">
+                                    @emoji
+                                </span>
+                            }
+                        </div>
+
+                        <div class="text-end mt-3">
+                            <button @onclick="HandleSaveJournalEntry" class="btn btn-primary">Kaydet</button>
+                        </div>
+                    </div>
+                }
+                else if (_currentEntry != null)
+                {
+                    <div class="journal-entry">
+                        <div class="d-flex justify-content-between">
+                            <div class="journal-date">
+                                @_currentEntry.EntryDate.ToString("dd MMMM yyyy, dddd")
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button @onclick="EditJournalEntry" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-pencil"></i> Düzenle
+                                </button>
+                                <button @onclick="HandleDeleteJournalEntry" class="btn btn-sm btn-outline-danger">
+                                    <i class="bi bi-trash"></i> Sil
+                                </button>
+                            </div>
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(_currentEntry.Mood))
+                        {
+                            <div class="mt-2">
+                                Ruh hali:
+                                @switch (_currentEntry.Mood)
+                                {
+                                    case "happy":
+                                        <span>😊 Mutlu</span>
+                                        break;
+                                    case "calm":
+                                        <span>😌 Sakin</span>
+                                        break;
+                                    case "sad":
+                                        <span>😔 Üzgün</span>
+                                        break;
+                                    case "excited":
+                                        <span>😃 Heyecanlı</span>
+                                        break;
+                                    case "tired":
+                                        <span>😴 Yorgun</span>
+                                        break;
+                                    default:
+                                        <span></span>
+                                        break;
+                                }
+                            </div>
+                        }
+
+                        <div class="journal-content mt-3">
+                            @((MarkupString)_currentEntry.Content)
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="no-entry text-center py-5">
+                        <p class="text-muted">Bu tarih için henüz bir günlük girişi bulunmuyor.</p>
+                        <button @onclick="CreateNewEntry" class="btn btn-primary mt-3">
+                            <i class="bi bi-plus-circle me-2"></i> Yeni Günlük Girişi Oluştur
+                        </button>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+</div>
+
+
+@code {
+    // State management
+    private DateTime _selectedDate = DateTime.Today;
+    private DateTime _currentMonth = DateTime.Today;
+    private JournalEntry? _currentEntry;
+
+    // View state properties
+    private bool _isLoading;
+    private bool _canCreateEntry = true;
+    private string _selectedMood = string.Empty;
+    private string _initialContent = string.Empty;
+
+    // Constants
+    private static readonly string[] DayNames =
+        new[] { "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz" };
+
+    // Collections
+    private List<CalendarDay> _calendarDays = new();
+    private List<JournalEntry> _monthEntries = new();
+
+    // Computed properties
+    private string CurrentMonthYear =>
+        _currentMonth.ToString("MMMM yyyy", new System.Globalization.CultureInfo("tr-TR"));
+
+    private BlazoredTextEditor? _editor;
+
+    // Handler methods to convert method groups to async methods
+    private async Task HandleSaveJournalEntry()
+    {
+        if (_editor == null) return;
+
+        string? htmlContent = await _editor.GetHTML();
+        if (!string.IsNullOrWhiteSpace(htmlContent) && htmlContent != "<p><br></p>")
+        {
+            await SaveJournalEntryAsync(htmlContent);
+        }
+        else
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "Günlük girişi boş olamaz.");
+        }
+    }
+
+    private async Task HandleDeleteJournalEntry()
+    {
+        await DeleteJournalEntryAsync();
+    }
+    // Lifecycle method
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCalendarAsync();
+        await LoadJournalEntryAsync();
+    }
+
+    // Calendar methods
+    private async Task LoadCalendarAsync()
+    {
+        _calendarDays.Clear();
+
+        var firstDayOfMonth = new DateTime(_currentMonth.Year, _currentMonth.Month, 1);
+        var startingDayOffset = CalculateDayOffset(firstDayOfMonth);
+        var daysInMonth = DateTime.DaysInMonth(_currentMonth.Year, _currentMonth.Month);
+
+        // Retrieve month entries
+        _monthEntries = await JournalService.GetEntriesByMonthAsync(_currentMonth);
+
+        // Add empty days before month start
+        AddEmptyDays(startingDayOffset);
+
+        // Add month days
+        AddMonthDays(daysInMonth);
+    }
+
+    private int CalculateDayOffset(DateTime date) =>
+        date.DayOfWeek == DayOfWeek.Sunday ? 7 : (int)date.DayOfWeek;
+
+    private void AddEmptyDays(int startingDayOffset)
+    {
+        for (int i = 1; i < startingDayOffset; i++)
+        {
+            _calendarDays.Add(new CalendarDay { Day = 0 });
+        }
+    }
+
+    private void AddMonthDays(int daysInMonth)
+    {
+        for (int day = 1; day <= daysInMonth; day++)
+        {
+            var currentDate = new DateTime(_currentMonth.Year, _currentMonth.Month, day);
+            var entry = _monthEntries.FirstOrDefault(e => e.EntryDate.Date == currentDate.Date);
+
+            _calendarDays.Add(new CalendarDay
+            {
+                Day = day,
+                Date = currentDate,
+                IsToday = currentDate.Date == DateTime.Today.Date,
+                HasEntry = entry != null
+            });
+        }
+    }
+
+    // Navigation methods
+    private async Task NavigateMonth(int direction)
+    {
+        _currentMonth = _currentMonth.AddMonths(direction);
+        await LoadCalendarAsync();
+
+        // Reset to today if navigating to current month
+        if (IsCurrentMonth(_currentMonth))
+        {
+            _selectedDate = DateTime.Today;
+        }
+
+        await LoadJournalEntryAsync();
+    }
+
+    private bool IsCurrentMonth(DateTime month) =>
+        month.Year == DateTime.Today.Year && month.Month == DateTime.Today.Month;
+
+    // Date selection method
+    private async Task SelectDate(DateTime date)
+    {
+        if (date.Day == 0) return;
+
+        _selectedDate = date;
+        await LoadJournalEntryAsync();
+    }
+
+    private async Task LoadJournalEntryAsync()
+    {
+        _isLoading = true;
+        try
+        {
+            _currentEntry = await JournalService.GetEntryByDateAsync(_selectedDate);
+
+            // Determine entry creation rules
+            if (_selectedDate.Date > DateTime.Today.Date)
+            {
+                // Future dates
+                _canCreateEntry = false;
+                _initialContent = "Gelecek günler için günlük girişi yapılamaz.";
+            }
+            else if (_selectedDate.Date == DateTime.Today.Date && _currentEntry != null)
+            {
+                // Today's entry already exists
+                _canCreateEntry = false;
+                _initialContent = "Bugün için günlük girişi zaten yapılmış.";
+            }
+            else if (_selectedDate.Date < DateTime.Today.Date && _currentEntry != null)
+            {
+                // Past dates with existing entry
+                _canCreateEntry = false;
+                _initialContent = "Bu tarih için günlük girişi zaten yapılmış.";
+            }
+            else
+            {
+                // Allow entry creation
+                _canCreateEntry = true;
+                _initialContent = string.Empty;
+            }
+
+            // Set existing entry details if exists
+            if (_currentEntry != null)
+            {
+                _selectedMood = _currentEntry.Mood ?? string.Empty;
+                _initialContent = _currentEntry.Content;
+            }
+            else
+            {
+                _selectedMood = string.Empty;
+            }
+        }
+        catch (Exception ex)
+        {
+            await HandleErrorAsync(ex, "Günlük girişi yüklenirken hata oluştu");
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task SaveJournalEntryAsync(string htmlContent)
+    {
+        try
+        {
+            // Prevent future date entries
+            if (_selectedDate.Date > DateTime.Today.Date)
+            {
+                await JSRuntime.InvokeVoidAsync("alert", "Gelecek tarihli günlük girişi yapılamaz.");
+                return;
+            }
+
+            var entry = new JournalEntry
+            {
+                EntryDate = _selectedDate,
+                Content = htmlContent,
+                Mood = _selectedMood,
+                CreatedDate = DateTime.Now
+            };
+
+            // Check if it's a past date entry
+            bool isPastDateEntry = _selectedDate.Date < DateTime.Today.Date;
+
+            if (_currentEntry != null)
+            {
+                // Update existing entry
+                entry.Id = _currentEntry.Id;
+                entry.CreatedDate = _currentEntry.CreatedDate;
+
+                // Add a note for past date entries
+                if (isPastDateEntry)
+                {
+                    entry.Content += $"<p><em>Not: Bu günlük girişi {DateTime.Now:dd.MM.yyyy HH:mm} tarihinde eklendi.</em></p>";
+                }
+
+                await JournalService.UpdateEntryAsync(entry);
+            }
+            else
+            {
+                // Add new entry
+                // Add a note for past date entries
+                if (isPastDateEntry)
+                {
+                    entry.Content += $"<p><em>Not: Bu günlük girişi {DateTime.Now:dd.MM.yyyy HH:mm} tarihinde eklendi.</em></p>";
+                }
+
+                await JournalService.AddEntryAsync(entry);
+            }
+
+            // Reload data
+            await LoadCalendarAsync();
+            await LoadJournalEntryAsync();
+
+            await ShowSuccessMessageAsync("Günlük girişi başarıyla kaydedildi.");
+        }
+        catch (Exception ex)
+        {
+            await HandleErrorAsync(ex, "Günlük girişi kaydedilirken hata oluştu");
+        }
+    }
+
+    private void CreateNewEntry()
+    {
+        // Allow creating a new entry only for today and past dates without an existing entry
+        _canCreateEntry = _selectedDate.Date <= DateTime.Today.Date && _currentEntry == null;
+        _selectedMood = string.Empty;
+        _initialContent = string.Empty;
+    }
+
+
+    private async Task DeleteJournalEntryAsync()
+    {
+        if (_currentEntry == null) return;
+
+        try
+        {
+            bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm",
+                "Bu günlük kaydını silmek istediğinize emin misiniz?");
+
+            if (confirmed)
+            {
+                await JournalService.DeleteEntryAsync(_currentEntry.Id);
+
+                // Reset state
+                _currentEntry = null;
+                _canCreateEntry = true;
+                _selectedMood = string.Empty;
+                _initialContent = string.Empty;
+
+                // Reload calendar
+                await LoadCalendarAsync();
+
+                await ShowSuccessMessageAsync("Günlük kaydı başarıyla silindi.");
+            }
+        }
+        catch (Exception ex)
+        {
+            await HandleErrorAsync(ex, "Günlük kaydı silinirken hata oluştu");
+        }
+    }
+
+    // Utility methods
+    private string GetDayClasses(CalendarDay day)
+    {
+        var classes = new List<string> { "calendar-day" };
+
+        if (day.Day == 0) return "calendar-day empty";
+
+        if (day.IsToday) classes.Add("today");
+        if (day.Date == _selectedDate) classes.Add("selected");
+        if (day.HasEntry) classes.Add("has-entry");
+
+        return string.Join(" ", classes);
+    }
+
+    private void SetMood(string mood)
+    {
+        _selectedMood = mood;
+    }
+
+
+    private void EditJournalEntry()
+    {
+        if (_currentEntry == null) return;
+
+        _canCreateEntry = true;
+        _selectedMood = _currentEntry.Mood ?? string.Empty;
+        _initialContent = _currentEntry.Content;
+    }
+
+    // Error handling methods
+    private async Task HandleErrorAsync(Exception ex, string userMessage)
+    {
+        Console.WriteLine($"Error: {ex.Message}");
+        await JSRuntime.InvokeVoidAsync("alert", userMessage);
+    }
+
+    private async Task ShowSuccessMessageAsync(string message)
+    {
+        await JSRuntime.InvokeVoidAsync("alert", message);
+    }
+
+    // Supporting class
+    private class CalendarDay
+    {
+        public int Day { get; set; }
+        public DateTime Date { get; set; }
+        public bool IsToday { get; set; }
+        public bool HasEntry { get; set; }
+    }
+}

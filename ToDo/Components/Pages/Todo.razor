@@ -1,0 +1,354 @@
+﻿@page "/todo"
+
+@rendermode InteractiveServer
+@inject TodoService TodoService
+@inject IJSRuntime JSRuntime
+
+<style>
+    .todo-item {
+        transition: all 0.2s ease;
+        position: relative;
+    }
+
+        .todo-item:hover {
+            box-shadow: 0 0 8px rgba(0,0,0,0.1);
+        }
+
+    .add-todo-editor {
+        margin-bottom: 20px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 10px;
+        background-color: #f9f9f9;
+    }
+
+    .move-buttons {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .completed-task {
+        text-decoration: line-through;
+        color: #6c757d;
+    }
+
+    ::deep .ql-container {
+        min-height: 100px;
+    }
+</style>
+
+<div class="container mt-4 mb-5">
+    <h1>Todo List</h1>
+
+    <div class="add-todo-editor">
+        <h5>Add New Task</h5>
+        <div id="newTaskWrapper">
+            @if (showNewEditor)
+            {
+                <BlazoredTextEditor @ref="NewTodoEditor">
+                    <ToolbarContent>
+                        <select class="ql-header">
+                            <option selected=""></option>
+                            <option value="1"></option>
+                            <option value="2"></option>
+                        </select>
+                        <span class="ql-formats">
+                            <button class="ql-bold"></button>
+                            <button class="ql-italic"></button>
+                            <button class="ql-underline"></button>
+                        </span>
+                        <span class="ql-formats">
+                            <button class="ql-list" value="ordered"></button>
+                            <button class="ql-list" value="bullet"></button>
+                        </span>
+                    </ToolbarContent>
+                </BlazoredTextEditor>
+            }
+        </div>
+        <div class="text-end mt-2">
+            <button @onclick="AddTodo" class="btn btn-primary">Add Todo</button>
+        </div>
+    </div>
+
+    @if (todos == null)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else
+    {
+        <div class="alert alert-info mb-3">
+            <small>Use the up and down buttons to reorder tasks</small>
+        </div>
+
+        <div id="todo-container">
+            @foreach (var todo in todos.OrderBy(t => t.DisplayOrder))
+            {
+                <div class="card mb-2 todo-item" id="todo-@todo.Id">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="@(editingTodoId == todo.Id ? "flex-grow-1" : "d-flex align-items-start")">
+                                @if (editingTodoId != todo.Id)
+                                {
+                                    <div class="move-buttons me-2">
+                                        <button @onclick="() => MoveUp(todo)" class="btn btn-sm btn-outline-secondary"
+                                                disabled="@(todo.DisplayOrder == todos.Min(t => t.DisplayOrder))">
+                                            <i class="bi bi-arrow-up"></i>
+                                        </button>
+                                        <button @onclick="() => MoveDown(todo)" class="btn btn-sm btn-outline-secondary"
+                                                disabled="@(todo.DisplayOrder == todos.Max(t => t.DisplayOrder))">
+                                            <i class="bi bi-arrow-down"></i>
+                                        </button>
+                                    </div>
+
+                                    <div class="d-flex align-items-center">
+                                        <input type="checkbox" checked="@todo.IsComplete" @onchange="@(e => ToggleTodo(todo))"
+                                               class="form-check-input me-2" />
+                                        <div class="@(todo.IsComplete ? "completed-task" : "")">
+                                            @((MarkupString)todo.Title)
+                                        </div>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="w-100">
+                                        <textarea @bind="editTodoText" class="form-control mb-2" rows="4"></textarea>
+                                        <div class="mt-2">
+                                            <button @onclick="SaveEdit" class="btn btn-sm btn-success me-1">Save</button>
+                                            <button @onclick="CancelEdit" class="btn btn-sm btn-secondary">Cancel</button>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+
+                            <div>
+                                @if (editingTodoId != todo.Id)
+                                {
+                                    <button @onclick="@(() => StartEdit(todo))" class="btn btn-info btn-sm me-1">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <button @onclick="@(() => DeleteTodo(todo.Id))" class="btn btn-danger btn-sm">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="text-muted mt-2 small">
+                            <div>Created: @todo.CreatedDate.ToShortDateString()</div>
+                            @if (todo.CompletedDate.HasValue)
+                            {
+                                <div>Completed: @todo.CompletedDate.Value.ToShortDateString()</div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<ToDo.Models.Todo>? todos;
+    private int editingTodoId = 0;
+    private string editTodoText = "";
+    private ToDo.Models.Todo? currentlyEditingTodo;
+    private BlazoredTextEditor? NewTodoEditor;
+    private bool showNewEditor = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTodos();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        try
+        {
+            if (firstRender && NewTodoEditor != null)
+            {
+                await NewTodoEditor.LoadHTMLContent("");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error initializing editor: {ex.Message}");
+        }
+    }
+
+    private async Task LoadTodos()
+    {
+        todos = await TodoService.GetTodosAsync();
+
+        // If DisplayOrder is not set, set it sequentially
+        if (todos != null && todos.Any(t => t.DisplayOrder == 0))
+        {
+            int order = 1;
+            foreach (var todo in todos.OrderBy(t => t.Id))
+            {
+                todo.DisplayOrder = order++;
+                await TodoService.UpdateTodoAsync(todo);
+            }
+
+            // Reload after setting orders
+            todos = await TodoService.GetTodosAsync();
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task AddTodo()
+    {
+        try
+        {
+            if (NewTodoEditor != null)
+            {
+                string? htmlContent = await NewTodoEditor.GetHTML();
+
+                if (!string.IsNullOrWhiteSpace(htmlContent) && htmlContent != "<p><br></p>")
+                {
+                    // Get the highest display order and add 1
+                    int newOrder = todos?.Count > 0 ? todos.Max(t => t.DisplayOrder) + 1 : 1;
+
+                    await TodoService.AddTodoAsync(new ToDo.Models.Todo
+                    {
+                        Title = htmlContent,
+                        IsComplete = false,
+                        CreatedDate = DateTime.Now,
+                        DisplayOrder = newOrder
+                    });
+
+                    // Reset the editor by recreating it
+                    showNewEditor = false;
+                    StateHasChanged();
+                    showNewEditor = true;
+                    StateHasChanged();
+
+                    await LoadTodos();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error adding todo: {ex.Message}");
+
+            // Fallback to plain text if the editor fails
+            if (!string.IsNullOrWhiteSpace(editTodoText))
+            {
+                int newOrder = todos?.Count > 0 ? todos.Max(t => t.DisplayOrder) + 1 : 1;
+
+                await TodoService.AddTodoAsync(new ToDo.Models.Todo
+                {
+                    Title = editTodoText,
+                    IsComplete = false,
+                    CreatedDate = DateTime.Now,
+                    DisplayOrder = newOrder
+                });
+
+                editTodoText = "";
+                await LoadTodos();
+            }
+        }
+    }
+
+    private async Task ToggleTodo(ToDo.Models.Todo todo)
+    {
+        todo.IsComplete = !todo.IsComplete;
+        if (todo.IsComplete)
+        {
+            todo.CompletedDate = DateTime.Now;
+        }
+        else
+        {
+            todo.CompletedDate = null;
+        }
+        await TodoService.UpdateTodoAsync(todo);
+        await LoadTodos();
+    }
+
+    private void StartEdit(ToDo.Models.Todo todo)
+    {
+        editingTodoId = todo.Id;
+        editTodoText = todo.Title;
+        currentlyEditingTodo = todo;
+    }
+
+    private async Task SaveEdit()
+    {
+        if (currentlyEditingTodo != null && !string.IsNullOrWhiteSpace(editTodoText))
+        {
+            currentlyEditingTodo.Title = editTodoText;
+            await TodoService.UpdateTodoAsync(currentlyEditingTodo);
+            CancelEdit();
+            await LoadTodos();
+        }
+    }
+
+    private void CancelEdit()
+    {
+        editingTodoId = 0;
+        editTodoText = "";
+        currentlyEditingTodo = null;
+    }
+
+    private async Task DeleteTodo(int id)
+    {
+        await TodoService.DeleteTodoAsync(id);
+        await LoadTodos();
+    }
+
+    // Move Up/Down Functions
+    private async Task MoveUp(ToDo.Models.Todo todo)
+    {
+        if (todos == null || todo.DisplayOrder <= 1)
+            return;
+
+        // Find the todo item above this one
+        var aboveTodo = todos.Where(t => t.DisplayOrder < todo.DisplayOrder)
+                            .OrderByDescending(t => t.DisplayOrder)
+                            .FirstOrDefault();
+
+        if (aboveTodo != null)
+        {
+            // Swap display orders
+            int currentOrder = todo.DisplayOrder;
+            todo.DisplayOrder = aboveTodo.DisplayOrder;
+            aboveTodo.DisplayOrder = currentOrder;
+
+            // Update both items
+            await TodoService.UpdateTodoAsync(todo);
+            await TodoService.UpdateTodoAsync(aboveTodo);
+
+            await LoadTodos();
+        }
+    }
+
+    private async Task MoveDown(ToDo.Models.Todo todo)
+    {
+        if (todos == null)
+            return;
+
+        int maxOrder = todos.Max(t => t.DisplayOrder);
+        if (todo.DisplayOrder >= maxOrder)
+            return;
+
+        // Find the todo item below this one
+        var belowTodo = todos.Where(t => t.DisplayOrder > todo.DisplayOrder)
+                            .OrderBy(t => t.DisplayOrder)
+                            .FirstOrDefault();
+
+        if (belowTodo != null)
+        {
+            // Swap display orders
+            int currentOrder = todo.DisplayOrder;
+            todo.DisplayOrder = belowTodo.DisplayOrder;
+            belowTodo.DisplayOrder = currentOrder;
+
+            // Update both items
+            await TodoService.UpdateTodoAsync(todo);
+            await TodoService.UpdateTodoAsync(belowTodo);
+
+            await LoadTodos();
+        }
+    }
+}
