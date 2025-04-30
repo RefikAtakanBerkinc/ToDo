@@ -1,5 +1,4 @@
 ﻿using ToDo.Models;
-using ToDo.Data;
 using Microsoft.EntityFrameworkCore;
 
 namespace ToDo.Services
