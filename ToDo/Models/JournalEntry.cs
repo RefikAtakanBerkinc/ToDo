@@ -20,5 +20,12 @@ namespace ToDo.Models
         public DateTime CreatedDate { get; set; } = DateTime.Now;
 
         public DateTime? ModifiedDate { get; set; }
+        
+        // Foreign key for User
+        public Guid? UserId { get; set; }
+        
+        // Navigation property
+        [ForeignKey("UserId")]
+        public User? User { get; set; }
     }
 }

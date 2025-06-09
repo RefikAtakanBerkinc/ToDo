@@ -18,7 +18,20 @@ namespace ToDo.Models
 
         [DataType(DataType.Date)]
         public DateTime? CompletedDate { get; set; }
+        
+        [DataType(DataType.Date)]
+        public DateTime? DueDate { get; set; }
 
         public int DisplayOrder { get; set; }
+        
+        // Todo durumu için enum yerine stringe çevirelim
+        public string Status { get; set; } = "Beklemede"; // Beklemede, Tamamlandı, İptal Edildi, vs.
+        
+        // Foreign key for User
+        public Guid? UserId { get; set; }
+        
+        // Navigation property
+        [ForeignKey("UserId")]
+        public User? User { get; set; }
     }
 }

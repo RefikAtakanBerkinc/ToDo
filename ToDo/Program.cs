@@ -15,12 +15,22 @@ builder.Services.AddRazorComponents()
 
 
 
-var connectionString = builder.Configuration.GetConnectionString("Database");
-
-builder.Services.AddDbContextFactory<ApplicationDbContext>(options => options.UseSqlite(connectionString));
+// Database Configuration - Environment based
+if (builder.Environment.EnvironmentName == "Testing")
+{
+    builder.Services.AddDbContext<ApplicationDbContext>(options =>
+        options.UseInMemoryDatabase("TestDatabase"));
+}
+else
+{
+    var connectionString = builder.Configuration.GetConnectionString("Database");
+    builder.Services.AddDbContext<ApplicationDbContext>(options => 
+        options.UseSqlite(connectionString));
+}
 
 builder.Services.AddScoped<TodoService>();
 builder.Services.AddScoped<JournalService>();
+
 // Authentication and Authorization Services
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -41,10 +51,12 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 // Authorization and Authentication State Management
 builder.Services.AddAuthorizationCore();
 builder.Services.AddCascadingAuthenticationState();
-builder.Services.AddScoped<AuthenticationStateProvider, CustomAuthStateProvider>();
+builder.Services.AddScoped<CustomAuthStateProvider>();
+builder.Services.AddScoped<AuthenticationStateProvider>(provider => provider.GetRequiredService<CustomAuthStateProvider>());
 // Dependency Injection
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddHttpContextAccessor();
+
 // Blazor Services
 builder.Services.AddServerSideBlazor();
 builder.Services.AddRazorPages(options =>
@@ -77,3 +89,6 @@ app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
 app.Run();
+
+// Make Program class accessible for testing
+public partial class Program { }

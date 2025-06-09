@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using ToDo.Services;
 
@@ -10,9 +11,11 @@ using ToDo.Services;
 namespace ToDo.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250521103738_AddNullableUserIdToModels")]
+    partial class AddNullableUserIdToModels
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.3");
@@ -64,15 +67,8 @@ namespace ToDo.Migrations
                     b.Property<int>("DisplayOrder")
                         .HasColumnType("INTEGER");
 
-                    b.Property<DateTime?>("DueDate")
-                        .HasColumnType("TEXT");
-
                     b.Property<bool>("IsComplete")
                         .HasColumnType("INTEGER");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
 
                     b.Property<string>("Title")
                         .IsRequired()

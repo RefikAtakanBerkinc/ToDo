@@ -1,0 +1,271 @@
+@page "/completed-todos"
+
+@rendermode InteractiveServer
+@inject TodoService TodoService
+@inject IJSRuntime JSRuntime
+@inject Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider AuthStateProvider
+@using System.Security.Claims
+
+<style>
+    .todo-item {
+        transition: all 0.2s ease;
+        position: relative;
+    }
+
+    .todo-item:hover {
+        box-shadow: 0 0 8px rgba(0,0,0,0.1);
+    }
+
+    .completed-task {
+        text-decoration: line-through;
+        color: #6c757d;
+    }
+    
+    .filter-section {
+        background-color: #f8f9fa;
+        padding: 15px;
+        border-radius: 4px;
+        margin-bottom: 20px;
+        border: 1px solid #eee;
+    }
+    
+    .status-filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 15px;
+    }
+    
+    .date-filter {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+    }
+    
+    .date-range {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+    }
+</style>
+
+<div class="container mt-4 mb-5">
+    <h1>Completed Tasks</h1>
+    
+    <div class="d-flex justify-content-between mb-3">
+        <div>
+            <a href="/todo" class="btn btn-outline-primary">
+                <i class="bi bi-arrow-left"></i> Back to Todo List
+            </a>
+        </div>
+    </div>
+    
+    <!-- Filtreleme Bölümü -->
+    <div class="filter-section">
+        <h5>Filtreler</h5>
+        
+        <div class="date-filter mb-3">
+            <div>
+                <label class="mb-1">Tamamlanma Tarihi:</label>
+                <div class="date-range">
+                    <div class="input-group">
+                        <span class="input-group-text">Başlangıç</span>
+                        <input type="date" class="form-control" 
+                               @bind="startDateFilter" 
+                               @bind:after="ApplyFilters" />
+                    </div>
+                    
+                    <div class="input-group">
+                        <span class="input-group-text">Bitiş</span>
+                        <input type="date" class="form-control" 
+                               @bind="endDateFilter" 
+                               @bind:after="ApplyFilters" />
+                    </div>
+                    
+                    @if (startDateFilter.HasValue || endDateFilter.HasValue)
+                    {
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="ClearDateFilters">
+                            <i class="bi bi-x"></i> Temizle
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (completedTodos == null)
+    {
+        <p><em>Loading...</em></p>
+    }
+    else if (!filteredTodos.Any())
+    {
+        <div class="alert alert-info">
+            You don't have any completed tasks matching the current filters.
+        </div>
+    }
+    else
+    {
+        <div id="completed-todo-container">
+            @foreach (var todo in filteredTodos)
+            {
+                <div class="card mb-2 todo-item" id="todo-@todo.Id">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="d-flex align-items-center">
+                                <input type="checkbox" checked="@todo.IsComplete" @onchange="@(e => ToggleTodo(todo))"
+                                       class="form-check-input me-2" />
+                                <div class="completed-task">
+                                    @((MarkupString)todo.Title)
+                                </div>
+                            </div>
+
+                            <div>
+                                <button @onclick="@(() => DeleteTodo(todo.Id))" class="btn btn-danger btn-sm">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-between mt-2 small">
+                            <div class="text-muted">
+                                <div>Created: @todo.CreatedDate.ToShortDateString()</div>
+                                <div>Completed: @todo.CompletedDate?.ToShortDateString()</div>
+                            </div>
+                            
+                            <div>
+                                @if (todo.DueDate.HasValue)
+                                {
+                                    <span class="@(todo.DueDate < todo.CompletedDate ? "text-danger" : "text-success")">
+                                        <i class="bi bi-calendar"></i> 
+                                        Son Teslim: @todo.DueDate.Value.ToShortDateString()
+                                    </span>
+                                }
+                                
+                                <span class="ms-2 badge bg-success">
+                                    @todo.Status
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<ToDo.Models.Todo>? completedTodos;
+    private List<ToDo.Models.Todo> filteredTodos = new List<ToDo.Models.Todo>();
+    private Guid? currentUserId;
+    
+    // Filtreleme için
+    private DateTime? startDateFilter;
+    private DateTime? endDateFilter;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Get the current user ID
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            // Parse the user ID
+            var userIdClaim = user.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim != null && Guid.TryParse(userIdClaim.Value, out Guid userId))
+            {
+                currentUserId = userId;
+                await LoadCompletedTodos();
+            }
+            else
+            {
+                // If user ID not found or invalid, return empty list
+                completedTodos = new List<ToDo.Models.Todo>();
+                ApplyFilters();
+            }
+        }
+        else
+        {
+            // If user is not authenticated, return empty list
+            completedTodos = new List<ToDo.Models.Todo>();
+            ApplyFilters();
+        }
+    }
+
+    private async Task LoadCompletedTodos()
+    {
+        if (!currentUserId.HasValue)
+        {
+            completedTodos = new List<ToDo.Models.Todo>();
+            ApplyFilters();
+            return;
+        }
+        
+        // Get all completed todos for the current user
+        completedTodos = await TodoService.GetUserCompletedTodosAsync(currentUserId.Value);
+        ApplyFilters();
+    }
+    
+    private void ApplyFilters()
+    {
+        if (completedTodos == null)
+        {
+            filteredTodos = new List<ToDo.Models.Todo>();
+            return;
+        }
+        
+        filteredTodos = completedTodos.ToList();
+        
+        // Tamamlanma tarihi filtreleri uygula
+        if (startDateFilter.HasValue)
+        {
+            filteredTodos = filteredTodos
+                .Where(t => t.CompletedDate.HasValue && t.CompletedDate.Value.Date >= startDateFilter.Value.Date)
+                .ToList();
+        }
+        
+        if (endDateFilter.HasValue)
+        {
+            filteredTodos = filteredTodos
+                .Where(t => t.CompletedDate.HasValue && t.CompletedDate.Value.Date <= endDateFilter.Value.Date)
+                .ToList();
+        }
+        
+        // Tarihe göre sıralama (en son tamamlananlar üstte)
+        filteredTodos = filteredTodos
+            .OrderByDescending(t => t.CompletedDate)
+            .ToList();
+    }
+    
+    private void ClearDateFilters()
+    {
+        startDateFilter = null;
+        endDateFilter = null;
+        ApplyFilters();
+    }
+
+    private async Task ToggleTodo(ToDo.Models.Todo todo)
+    {
+        todo.IsComplete = !todo.IsComplete;
+        if (!todo.IsComplete)
+        {
+            todo.CompletedDate = null;
+            todo.Status = "Beklemede";
+        }
+        else 
+        {
+            todo.CompletedDate = DateTime.Now;
+            todo.Status = "Tamamlandı";
+        }
+        
+        await TodoService.UpdateTodoAsync(todo);
+        await LoadCompletedTodos();
+    }
+
+    private async Task DeleteTodo(int id)
+    {
+        await TodoService.DeleteTodoAsync(id);
+        await LoadCompletedTodos();
+    }
+} 

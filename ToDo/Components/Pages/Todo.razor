@@ -3,6 +3,8 @@
 @rendermode InteractiveServer
 @inject TodoService TodoService
 @inject IJSRuntime JSRuntime
+@inject Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider AuthStateProvider
+@using System.Security.Claims
 
 <style>
     .todo-item {
@@ -36,10 +38,97 @@
     ::deep .ql-container {
         min-height: 100px;
     }
+    
+    .filter-section {
+        background-color: #f8f9fa;
+        padding: 15px;
+        border-radius: 4px;
+        margin-bottom: 20px;
+        border: 1px solid #eee;
+    }
+    
+    .status-filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 15px;
+    }
+    
+    .status-filter-btn {
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 14px;
+        cursor: pointer;
+        background-color: #e9ecef;
+        border: 1px solid #ced4da;
+        transition: all 0.2s;
+    }
+    
+    .status-filter-btn.active {
+        background-color: #0d6efd;
+        color: white;
+        border-color: #0d6efd;
+    }
+    
+    .date-filter {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: center;
+    }
 </style>
 
 <div class="container mt-4 mb-5">
     <h1>Todo List</h1>
+    
+    <div class="d-flex justify-content-between mb-3">
+        <div>
+            <a href="/completed-todos" class="btn btn-outline-primary">
+                <i class="bi bi-check-all"></i> View Completed Todos
+            </a>
+        </div>
+    </div>
+    
+    <!-- Filtreleme Bölümü -->
+    <div class="filter-section">
+        <h5>Filtreler</h5>
+        
+        <div class="status-filters">
+            <span class="me-2">Durum:</span>
+            <button class="status-filter-btn @(currentFilter == "all" ? "active" : "")" 
+                    @onclick='() => FilterByStatus("all")'>
+                Tümü
+            </button>
+            <button class="status-filter-btn @(currentFilter == "Beklemede" ? "active" : "")" 
+                    @onclick='() => FilterByStatus("Beklemede")'>
+                Beklemede
+            </button>
+            <button class="status-filter-btn @(currentFilter == "Tamamlandı" ? "active" : "")" 
+                    @onclick='() => FilterByStatus("Tamamlandı")'>
+                Tamamlandı
+            </button>
+            <button class="status-filter-btn @(currentFilter == "overdue" ? "active" : "")" 
+                    @onclick='() => FilterByStatus("overdue")'>
+                Gecikmiş
+            </button>
+        </div>
+        
+        <div class="date-filter">
+            <span>Son Teslim Tarihi:</span>
+            <div class="d-flex align-items-center">
+                <input type="date" class="form-control" 
+                       @bind="dueDateFilter" 
+                       @bind:after="ApplyDateFilter" />
+                
+                @if (dueDateFilter.HasValue)
+                {
+                    <button class="btn btn-sm btn-outline-secondary ms-2" @onclick="ClearDateFilter">
+                        <i class="bi bi-x"></i> Temizle
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
 
     <div class="add-todo-editor">
         <h5>Add New Task</h5>
@@ -66,14 +155,38 @@
                 </BlazoredTextEditor>
             }
         </div>
-        <div class="text-end mt-2">
-            <button @onclick="AddTodo" class="btn btn-primary">Add Todo</button>
+        <div class="mt-3 row">
+            <div class="col-md-4">
+                <div class="form-group">
+                    <label>Son Teslim Tarihi:</label>
+                    <input type="date" class="form-control" @bind="newTodoDueDate" />
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="form-group">
+                    <label>Durum:</label>
+                    <select class="form-select" @bind="newTodoStatus">
+                        <option value="Beklemede">Beklemede</option>
+                        <option value="Tamamlandı">Tamamlandı</option>
+                        <option value="İptal Edildi">İptal Edildi</option>
+                    </select>
+                </div>
+            </div>
+            <div class="col-md-4 d-flex align-items-end justify-content-end">
+                <button @onclick="AddTodo" class="btn btn-primary">Add Todo</button>
+            </div>
         </div>
     </div>
 
     @if (todos == null)
     {
         <p><em>Loading...</em></p>
+    }
+    else if (!filteredTodos.Any())
+    {
+        <div class="alert alert-info">
+            You don't have any active tasks matching the current filters.
+        </div>
     }
     else
     {
@@ -82,7 +195,7 @@
         </div>
 
         <div id="todo-container">
-            @foreach (var todo in todos.OrderBy(t => t.DisplayOrder))
+            @foreach (var todo in filteredTodos.OrderBy(t => t.DisplayOrder))
             {
                 <div class="card mb-2 todo-item" id="todo-@todo.Id">
                     <div class="card-body">
@@ -92,11 +205,11 @@
                                 {
                                     <div class="move-buttons me-2">
                                         <button @onclick="() => MoveUp(todo)" class="btn btn-sm btn-outline-secondary"
-                                                disabled="@(todo.DisplayOrder == todos.Min(t => t.DisplayOrder))">
+                                                disabled="@(todo.DisplayOrder == filteredTodos.Min(t => t.DisplayOrder))">
                                             <i class="bi bi-arrow-up"></i>
                                         </button>
                                         <button @onclick="() => MoveDown(todo)" class="btn btn-sm btn-outline-secondary"
-                                                disabled="@(todo.DisplayOrder == todos.Max(t => t.DisplayOrder))">
+                                                disabled="@(todo.DisplayOrder == filteredTodos.Max(t => t.DisplayOrder))">
                                             <i class="bi bi-arrow-down"></i>
                                         </button>
                                     </div>
@@ -113,7 +226,25 @@
                                 {
                                     <div class="w-100">
                                         <textarea @bind="editTodoText" class="form-control mb-2" rows="4"></textarea>
-                                        <div class="mt-2">
+                                        <div class="row mt-2">
+                                            <div class="col-md-6">
+                                                <div class="form-group">
+                                                    <label>Son Teslim Tarihi:</label>
+                                                    <input type="date" class="form-control" @bind="editTodoDueDate" />
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="form-group">
+                                                    <label>Durum:</label>
+                                                    <select class="form-select" @bind="editTodoStatus">
+                                                        <option value="Beklemede">Beklemede</option>
+                                                        <option value="Tamamlandı">Tamamlandı</option>
+                                                        <option value="İptal Edildi">İptal Edildi</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="mt-3">
                                             <button @onclick="SaveEdit" class="btn btn-sm btn-success me-1">Save</button>
                                             <button @onclick="CancelEdit" class="btn btn-sm btn-secondary">Cancel</button>
                                         </div>
@@ -134,12 +265,28 @@
                             </div>
                         </div>
 
-                        <div class="text-muted mt-2 small">
-                            <div>Created: @todo.CreatedDate.ToShortDateString()</div>
-                            @if (todo.CompletedDate.HasValue)
-                            {
-                                <div>Completed: @todo.CompletedDate.Value.ToShortDateString()</div>
-                            }
+                        <div class="d-flex justify-content-between mt-2 small">
+                            <div class="text-muted">
+                                <div>Created: @todo.CreatedDate.ToShortDateString()</div>
+                                @if (todo.CompletedDate.HasValue)
+                                {
+                                    <div>Completed: @todo.CompletedDate.Value.ToShortDateString()</div>
+                                }
+                            </div>
+                            
+                            <div>
+                                @if (todo.DueDate.HasValue)
+                                {
+                                    <span class="@(todo.DueDate < DateTime.Today ? "text-danger" : "text-info")">
+                                        <i class="bi bi-calendar"></i> 
+                                        Son Teslim: @todo.DueDate.Value.ToShortDateString()
+                                    </span>
+                                }
+                                
+                                <span class="ms-2 badge @GetStatusBadgeClass(todo.Status)">
+                                    @todo.Status
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -150,15 +297,54 @@
 
 @code {
     private List<ToDo.Models.Todo>? todos;
+    private List<ToDo.Models.Todo> filteredTodos = new List<ToDo.Models.Todo>();
     private int editingTodoId = 0;
     private string editTodoText = "";
     private ToDo.Models.Todo? currentlyEditingTodo;
     private BlazoredTextEditor? NewTodoEditor;
     private bool showNewEditor = true;
+    private Guid? currentUserId;
+    
+    // Yeni görev için alanlar
+    private DateTime? newTodoDueDate;
+    private string newTodoStatus = "Beklemede";
+    
+    // Düzenleme için alanlar
+    private DateTime? editTodoDueDate;
+    private string editTodoStatus = "Beklemede";
+    
+    // Filtreleme için
+    private string currentFilter = "all";
+    private DateTime? dueDateFilter;
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadTodos();
+        // Get the current user ID
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            // Parse the user ID
+            var userIdClaim = user.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim != null && Guid.TryParse(userIdClaim.Value, out Guid userId))
+            {
+                currentUserId = userId;
+                await LoadTodos();
+            }
+            else
+            {
+                // If user ID not found or invalid, return empty list
+                todos = new List<ToDo.Models.Todo>();
+                ApplyFilters();
+            }
+        }
+        else
+        {
+            // If user is not authenticated, return empty list
+            todos = new List<ToDo.Models.Todo>();
+            ApplyFilters();
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -178,8 +364,16 @@
 
     private async Task LoadTodos()
     {
-        todos = await TodoService.GetTodosAsync();
-
+        if (!currentUserId.HasValue)
+        {
+            todos = new List<ToDo.Models.Todo>();
+            ApplyFilters();
+            return;
+        }
+        
+        // Get todos for the current user
+        todos = await TodoService.GetUserTodosAsync(currentUserId.Value);
+        
         // If DisplayOrder is not set, set it sequentially
         if (todos != null && todos.Any(t => t.DisplayOrder == 0))
         {
@@ -191,14 +385,81 @@
             }
 
             // Reload after setting orders
-            todos = await TodoService.GetTodosAsync();
+            todos = await TodoService.GetUserTodosAsync(currentUserId.Value);
         }
-
+        
+        ApplyFilters();
         StateHasChanged();
+    }
+    
+    private void ApplyFilters()
+    {
+        if (todos == null)
+        {
+            filteredTodos = new List<ToDo.Models.Todo>();
+            return;
+        }
+        
+        filteredTodos = todos.ToList();
+        
+        // Status filtresi uygula
+        if (currentFilter != "all")
+        {
+            if (currentFilter == "overdue")
+            {
+                // Gecikmiş görevler (tamamlanmamış ve son teslim tarihi geçmiş)
+                filteredTodos = filteredTodos
+                    .Where(t => !t.IsComplete && t.DueDate.HasValue && t.DueDate.Value < DateTime.Today)
+                    .ToList();
+            }
+            else
+            {
+                // Normal durum filtresi
+                filteredTodos = filteredTodos.Where(t => t.Status == currentFilter).ToList();
+            }
+        }
+        
+        // Son teslim tarihi filtresi uygula
+        if (dueDateFilter.HasValue)
+        {
+            filteredTodos = filteredTodos
+                .Where(t => t.DueDate.HasValue && t.DueDate.Value.Date == dueDateFilter.Value.Date)
+                .ToList();
+        }
+    }
+    
+    private void FilterByStatus(string status)
+    {
+        currentFilter = status;
+        ApplyFilters();
+    }
+    
+    private void ApplyDateFilter()
+    {
+        ApplyFilters();
+    }
+    
+    private void ClearDateFilter()
+    {
+        dueDateFilter = null;
+        ApplyFilters();
+    }
+    
+    private string GetStatusBadgeClass(string status)
+    {
+        return status switch
+        {
+            "Beklemede" => "bg-warning text-dark",
+            "Tamamlandı" => "bg-success",
+            "İptal Edildi" => "bg-danger",
+            _ => "bg-secondary"
+        };
     }
 
     private async Task AddTodo()
     {
+        if (!currentUserId.HasValue) return;
+        
         try
         {
             if (NewTodoEditor != null)
@@ -215,7 +476,10 @@
                         Title = htmlContent,
                         IsComplete = false,
                         CreatedDate = DateTime.Now,
-                        DisplayOrder = newOrder
+                        DisplayOrder = newOrder,
+                        UserId = currentUserId.Value,
+                        DueDate = newTodoDueDate,
+                        Status = newTodoStatus
                     });
 
                     // Reset the editor by recreating it
@@ -223,6 +487,10 @@
                     StateHasChanged();
                     showNewEditor = true;
                     StateHasChanged();
+                    
+                    // Reset new todo fields
+                    newTodoDueDate = null;
+                    newTodoStatus = "Beklemede";
 
                     await LoadTodos();
                 }
@@ -242,10 +510,15 @@
                     Title = editTodoText,
                     IsComplete = false,
                     CreatedDate = DateTime.Now,
-                    DisplayOrder = newOrder
+                    DisplayOrder = newOrder,
+                    UserId = currentUserId.Value,
+                    DueDate = newTodoDueDate,
+                    Status = newTodoStatus
                 });
 
                 editTodoText = "";
+                newTodoDueDate = null;
+                newTodoStatus = "Beklemede";
                 await LoadTodos();
             }
         }
@@ -257,10 +530,12 @@
         if (todo.IsComplete)
         {
             todo.CompletedDate = DateTime.Now;
+            todo.Status = "Tamamlandı";
         }
         else
         {
             todo.CompletedDate = null;
+            todo.Status = "Beklemede";
         }
         await TodoService.UpdateTodoAsync(todo);
         await LoadTodos();
@@ -270,6 +545,8 @@
     {
         editingTodoId = todo.Id;
         editTodoText = todo.Title;
+        editTodoDueDate = todo.DueDate;
+        editTodoStatus = todo.Status;
         currentlyEditingTodo = todo;
     }
 
@@ -278,6 +555,21 @@
         if (currentlyEditingTodo != null && !string.IsNullOrWhiteSpace(editTodoText))
         {
             currentlyEditingTodo.Title = editTodoText;
+            currentlyEditingTodo.DueDate = editTodoDueDate;
+            currentlyEditingTodo.Status = editTodoStatus;
+            
+            // Status değişikliğine bağlı olarak IsComplete ve CompletedDate değerlerini güncelle
+            if (editTodoStatus == "Tamamlandı" && !currentlyEditingTodo.IsComplete)
+            {
+                currentlyEditingTodo.IsComplete = true;
+                currentlyEditingTodo.CompletedDate = DateTime.Now;
+            }
+            else if (editTodoStatus != "Tamamlandı" && currentlyEditingTodo.IsComplete)
+            {
+                currentlyEditingTodo.IsComplete = false;
+                currentlyEditingTodo.CompletedDate = null;
+            }
+            
             await TodoService.UpdateTodoAsync(currentlyEditingTodo);
             CancelEdit();
             await LoadTodos();
@@ -288,6 +580,8 @@
     {
         editingTodoId = 0;
         editTodoText = "";
+        editTodoDueDate = null;
+        editTodoStatus = "Beklemede";
         currentlyEditingTodo = null;
     }
 

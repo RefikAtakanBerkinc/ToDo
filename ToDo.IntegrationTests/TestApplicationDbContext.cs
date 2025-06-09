@@ -1,12 +1,11 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using ToDo.Models;
 
-namespace ToDo.Services
+namespace ToDo.IntegrationTests
 {
-    public class ApplicationDbContext : DbContext
+    public class TestApplicationDbContext : DbContext
     {
-        // Constructor for dependency injection
-        public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options)
+        public TestApplicationDbContext(DbContextOptions<TestApplicationDbContext> options) : base(options)
         {
         }
 
@@ -21,4 +20,4 @@ namespace ToDo.Services
             modelBuilder.Entity<User>().ToTable("Users");
         }
     }
-}
+} 

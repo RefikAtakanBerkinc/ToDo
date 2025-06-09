@@ -1,4 +1,11 @@
 ﻿@using Microsoft.AspNetCore.Components.Authorization
+@using ToDo.Services
+@using Microsoft.JSInterop
+@inject IJSRuntime JSRuntime
+@inject NavigationManager NavigationManager
+@inject IAuthService AuthService
+@inject CustomAuthStateProvider AuthStateProvider
+
 <div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
         <a class="navbar-brand" href="">ToDo</a>
@@ -24,25 +31,30 @@
                     </NavLink>
                 </div>
                 <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="journal">
-                        <span class="oi oi-list-rich" aria-hidden="true"></span> Günlük
+                    <NavLink class="nav-link" href="completed-todos">
+                        <span class="oi oi-check" aria-hidden="true"></span> Completed Todos
                     </NavLink>
                 </div>
                 <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="logout">
-                        <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Çıkış yap
+                    <NavLink class="nav-link" href="journal">
+                        <span class="oi oi-book" aria-hidden="true"></span> Günlük
                     </NavLink>
+                </div>
+                <div class="nav-item px-3">
+                    <button class="nav-link btn btn-link w-100 text-start" @onclick="LogoutAsync" style="border: none; background: none; padding: 0.5rem 1rem;">
+                        <span class="bi bi-box-arrow-right" aria-hidden="true"></span> Çıkış yap
+                    </button>
                 </div>
              </Authorized>
              <NotAuthorized>              
                 <div class="nav-item px-3">
                     <NavLink class="nav-link" href="signup">
-                        <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Kayıt ol
+                        <span class="bi bi-person-plus" aria-hidden="true"></span> Kayıt ol
                     </NavLink>
                 </div>                  
                 <div class="nav-item px-3">
                     <NavLink class="nav-link" href="login">
-                        <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Giriş yap
+                        <span class="bi bi-box-arrow-in-right" aria-hidden="true"></span> Giriş yap
                     </NavLink>
                 </div>                
 
@@ -53,3 +65,32 @@
     </nav>
 </div>
 
+@code {
+    private async Task LogoutAsync()
+    {
+        try
+        {
+            // Get user ID for logout service call
+            var userIdString = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "userId");
+            if (!string.IsNullOrEmpty(userIdString) && Guid.TryParse(userIdString, out var userId))
+            {
+                await AuthService.LogoutAsync(userId);
+            }
+        }
+        catch
+        {
+            // If service call fails, we still proceed with local logout
+        }
+
+        // Clear local storage
+        await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "accessToken");
+        await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "refreshToken");
+        await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "userId");
+
+        // Notify the authentication state provider about the change
+        AuthStateProvider.NotifyAuthenticationStateChanged();
+
+        // Navigate to login page
+        NavigationManager.NavigateTo("/login");
+    }
+}
