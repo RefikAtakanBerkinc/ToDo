@@ -79,12 +79,12 @@
 </style>
 
 <div class="container mt-4 mb-5">
-    <h1>Todo List</h1>
+    <h1>Görev Listesi</h1>
     
     <div class="d-flex justify-content-between mb-3">
         <div>
             <a href="/completed-todos" class="btn btn-outline-primary">
-                <i class="bi bi-check-all"></i> View Completed Todos
+                <i class="bi bi-check-all"></i> Tamamlanan Görevleri Görüntüle
             </a>
         </div>
     </div>
@@ -131,7 +131,7 @@
     </div>
 
     <div class="add-todo-editor">
-        <h5>Add New Task</h5>
+        <h5>Yeni Görev Ekle</h5>
         <div id="newTaskWrapper">
             @if (showNewEditor)
             {
@@ -173,25 +173,25 @@
                 </div>
             </div>
             <div class="col-md-4 d-flex align-items-end justify-content-end">
-                <button @onclick="AddTodo" class="btn btn-primary">Add Todo</button>
+                <button @onclick="AddTodo" class="btn btn-primary">Görev Ekle</button>
             </div>
         </div>
     </div>
 
     @if (todos == null)
     {
-        <p><em>Loading...</em></p>
+        <p><em>Yükleniyor...</em></p>
     }
     else if (!filteredTodos.Any())
     {
         <div class="alert alert-info">
-            You don't have any active tasks matching the current filters.
+            Mevcut filtrelerle eşleşen aktif göreviniz bulunmuyor.
         </div>
     }
     else
     {
         <div class="alert alert-info mb-3">
-            <small>Use the up and down buttons to reorder tasks</small>
+            <small>Görevleri yeniden sıralamak için yukarı ve aşağı butonlarını kullanın</small>
         </div>
 
         <div id="todo-container">
@@ -245,8 +245,8 @@
                                             </div>
                                         </div>
                                         <div class="mt-3">
-                                            <button @onclick="SaveEdit" class="btn btn-sm btn-success me-1">Save</button>
-                                            <button @onclick="CancelEdit" class="btn btn-sm btn-secondary">Cancel</button>
+                                            <button @onclick="SaveEdit" class="btn btn-sm btn-success me-1">Kaydet</button>
+                                            <button @onclick="CancelEdit" class="btn btn-sm btn-secondary">İptal</button>
                                         </div>
                                     </div>
                                 }
@@ -267,10 +267,10 @@
 
                         <div class="d-flex justify-content-between mt-2 small">
                             <div class="text-muted">
-                                <div>Created: @todo.CreatedDate.ToShortDateString()</div>
+                                <div>Oluşturuldu: @todo.CreatedDate.ToShortDateString()</div>
                                 @if (todo.CompletedDate.HasValue)
                                 {
-                                    <div>Completed: @todo.CompletedDate.Value.ToShortDateString()</div>
+                                    <div>Tamamlandı: @todo.CompletedDate.Value.ToShortDateString()</div>
                                 }
                             </div>
                             

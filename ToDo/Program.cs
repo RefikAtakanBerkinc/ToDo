@@ -30,6 +30,7 @@ else
 
 builder.Services.AddScoped<TodoService>();
 builder.Services.AddScoped<JournalService>();
+builder.Services.AddScoped<UserProfileService>();
 
 // Authentication and Authorization Services
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

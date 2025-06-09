@@ -11,14 +11,14 @@
 @inject IJSRuntime JSRuntime
 @inject AuthenticationStateProvider AuthStateProvider
 
-<PageTitle>Login</PageTitle>
+<PageTitle>Giriş</PageTitle>
 
 <div class="container">
     <div class="row justify-content-center">
         <div class="col-md-6 col-lg-4">
             <div class="card shadow mt-5">
                 <div class="card-header bg-primary text-white">
-                    <h3 class="text-center mb-0">Login</h3>
+                    <h3 class="text-center mb-0">Giriş</h3>
                 </div>
                 <div class="card-body">
                     <EditForm Model="@userDto" OnValidSubmit="HandleLogin" FormName="@formName">
@@ -26,14 +26,19 @@
                         <ValidationSummary />
 
                         <div class="mb-3">
-                            <label for="@usernameId" class="form-label">Username</label>
+                            <label for="@usernameId" class="form-label">Kullanıcı Adı</label>
                             <InputText id="@usernameId" @bind-Value="userDto.UserName" class="form-control" autocomplete="username" />
                             <ValidationMessage For="@(() => userDto.UserName)" />
                         </div>
 
                         <div class="mb-3">
-                            <label for="@passwordId" class="form-label">Password</label>
-                            <InputText id="@passwordId" @bind-Value="userDto.Password" class="form-control" type="password" autocomplete="current-password" />
+                            <label for="@passwordId" class="form-label">Şifre</label>
+                            <div class="input-group">
+                                <InputText id="@passwordId" @bind-Value="userDto.Password" class="form-control" type="@(showPassword ? "text" : "password")" autocomplete="current-password" />
+                                <button class="btn btn-outline-secondary" type="button" @onclick="TogglePasswordVisibility">
+                                    <i class="fas @(showPassword ? "fa-eye-slash" : "fa-eye")"></i>
+                                </button>
+                            </div>
                             <ValidationMessage For="@(() => userDto.Password)" />
                         </div>
 
@@ -42,11 +47,11 @@
                                 @if (isLoading)
                                 {
                                     <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                                    <span> Processing...</span>
+                                    <span> İşleniyor...</span>
                                 }
                                 else
                                 {
-                                    <span>Login</span>
+                                    <span>Giriş Yap</span>
                                 }
                             </button>
                         </div>
@@ -60,7 +65,7 @@
                     }
 
                     <div class="mt-3 text-center">
-                        <p>Don't have an account? <a href="/register-new">Sign up</a></p>
+                        <p>Hesabınız yok mu? <a href="/register-new">Kayıt olun</a></p>
                     </div>
                 </div>
             </div>
@@ -75,10 +80,16 @@
     private string usernameId = $"username-{Guid.NewGuid()}";
     private string passwordId = $"password-{Guid.NewGuid()}";
     private string formName = $"login-form-{Guid.NewGuid()}";
+    private bool showPassword = false;
 
     [Parameter]
     [SupplyParameterFromQuery]
     public string? ReturnUrl { get; set; }
+
+    private void TogglePasswordVisibility()
+    {
+        showPassword = !showPassword;
+    }
 
     private async Task HandleLogin()
     {
@@ -91,7 +102,7 @@
 
             if (result is null)
             {
-                errorMessage = "Invalid username or password.";
+                errorMessage = "Geçersiz kullanıcı adı veya şifre.";
                 return;
             }
 
@@ -124,7 +135,7 @@
         }
         catch (Exception ex)
         {
-            errorMessage = $"An error occurred: {ex.Message}";
+            errorMessage = $"Bir hata oluştu: {ex.Message}";
         }
         finally
         {

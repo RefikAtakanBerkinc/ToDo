@@ -51,12 +51,12 @@
 </style>
 
 <div class="container mt-4 mb-5">
-    <h1>Completed Tasks</h1>
+    <h1>Tamamlanan Görevler</h1>
     
     <div class="d-flex justify-content-between mb-3">
         <div>
             <a href="/todo" class="btn btn-outline-primary">
-                <i class="bi bi-arrow-left"></i> Back to Todo List
+                <i class="bi bi-arrow-left"></i> Görev Listesine Dön
             </a>
         </div>
     </div>
@@ -96,12 +96,12 @@
 
     @if (completedTodos == null)
     {
-        <p><em>Loading...</em></p>
+        <p><em>Yükleniyor...</em></p>
     }
     else if (!filteredTodos.Any())
     {
         <div class="alert alert-info">
-            You don't have any completed tasks matching the current filters.
+            Mevcut filtrelerle eşleşen tamamlanmış göreviniz bulunmuyor.
         </div>
     }
     else
@@ -129,8 +129,8 @@
 
                         <div class="d-flex justify-content-between mt-2 small">
                             <div class="text-muted">
-                                <div>Created: @todo.CreatedDate.ToShortDateString()</div>
-                                <div>Completed: @todo.CompletedDate?.ToShortDateString()</div>
+                                <div>Oluşturuldu: @todo.CreatedDate.ToShortDateString()</div>
+                                <div>Tamamlandı: @todo.CompletedDate?.ToShortDateString()</div>
                             </div>
                             
                             <div>

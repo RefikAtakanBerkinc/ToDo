@@ -1,0 +1,346 @@
+@page "/profile"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
+@using ToDo.Models.Dto
+@using ToDo.Services
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IAuthService AuthService
+@inject UserProfileService ProfileService
+@inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
+@attribute [Authorize]
+
+<PageTitle>Profil</PageTitle>
+
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-4">
+            <!-- Kullanıcı Bilgileri Card -->
+            <div class="card shadow mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-user me-2"></i>Kullanıcı Bilgileri
+                    </h5>
+                </div>
+                <div class="card-body text-center">
+                    <div class="profile-avatar mb-3">
+                        <i class="fas fa-user-circle fa-5x text-primary"></i>
+                    </div>
+                    @if (userStats != null)
+                    {
+                        <h4 class="card-title">@userStats.UserName</h4>
+                        <p class="text-muted">Üye</p>
+                    }
+                </div>
+            </div>
+
+            <!-- Şifre Değiştirme Card -->
+            <div class="card shadow">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0">
+                        <i class="fas fa-key me-2"></i>Şifre Değiştir
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <EditForm Model="changePasswordModel" OnValidSubmit="ChangePassword">
+                        <DataAnnotationsValidator />
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Mevcut Şifre</label>
+                            <InputText @bind-Value="changePasswordModel.CurrentPassword" 
+                                     type="password" 
+                                     class="form-control" 
+                                     placeholder="Mevcut şifrenizi girin" />
+                            <ValidationMessage For="@(() => changePasswordModel.CurrentPassword)" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Yeni Şifre</label>
+                            <InputText @bind-Value="changePasswordModel.NewPassword" 
+                                     type="password" 
+                                     class="form-control" 
+                                     placeholder="Yeni şifrenizi girin" />
+                            <ValidationMessage For="@(() => changePasswordModel.NewPassword)" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Yeni Şifre (Tekrar)</label>
+                            <InputText @bind-Value="changePasswordModel.ConfirmPassword" 
+                                     type="password" 
+                                     class="form-control" 
+                                     placeholder="Yeni şifrenizi tekrar girin" />
+                            <ValidationMessage For="@(() => changePasswordModel.ConfirmPassword)" />
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(changePasswordMessage))
+                        {
+                            <div class="alert @(changePasswordSuccess ? "alert-success" : "alert-danger")" role="alert">
+                                <i class="fas @(changePasswordSuccess ? "fa-check-circle" : "fa-exclamation-triangle") me-2"></i>
+                                @changePasswordMessage
+                            </div>
+                        }
+
+                        <button type="submit" class="btn btn-warning w-100" disabled="@isChangingPassword">
+                            @if (isChangingPassword)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                <span>Değiştiriliyor...</span>
+                            }
+                            else
+                            {
+                                <i class="fas fa-save me-2"></i>
+                                <span>Şifre Değiştir</span>
+                            }
+                        </button>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-8">
+            <!-- İstatistikler Card -->
+            <div class="card shadow mb-4">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-bar me-2"></i>Genel İstatistikler
+                    </h5>
+                </div>
+                <div class="card-body">
+                    @if (userStats != null)
+                    {
+                        <div class="row text-center">
+                            <div class="col-md-3 col-6 mb-3">
+                                <div class="stat-card bg-primary text-white p-3 rounded">
+                                    <i class="fas fa-tasks fa-2x mb-2"></i>
+                                    <h4>@userStats.TotalTodos</h4>
+                                    <small>Toplam Todo</small>
+                                </div>
+                            </div>
+                            <div class="col-md-3 col-6 mb-3">
+                                <div class="stat-card bg-success text-white p-3 rounded">
+                                    <i class="fas fa-check-circle fa-2x mb-2"></i>
+                                    <h4>@userStats.CompletedTodos</h4>
+                                    <small>Tamamlanan</small>
+                                </div>
+                            </div>
+                            <div class="col-md-3 col-6 mb-3">
+                                <div class="stat-card bg-warning text-white p-3 rounded">
+                                    <i class="fas fa-clock fa-2x mb-2"></i>
+                                    <h4>@userStats.PendingTodos</h4>
+                                    <small>Bekleyen</small>
+                                </div>
+                            </div>
+                            <div class="col-md-3 col-6 mb-3">
+                                <div class="stat-card bg-danger text-white p-3 rounded">
+                                    <i class="fas fa-times-circle fa-2x mb-2"></i>
+                                    <h4>@userStats.CancelledTodos</h4>
+                                    <small>İptal Edilen</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        @if (userStats.LastTodoCompleted.HasValue)
+                        {
+                            <div class="alert alert-info mt-3">
+                                <i class="fas fa-calendar-check me-2"></i>
+                                Son tamamlanan todo: <strong>@userStats.LastTodoCompleted.Value.ToString("dd.MM.yyyy HH:mm")</strong>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="text-center">
+                            <div class="spinner-border" role="status">
+                                <span class="visually-hidden">Yükleniyor...</span>
+                            </div>
+                            <p class="mt-2">İstatistikler yükleniyor...</p>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Günlük İstatistikleri Card -->
+            <div class="card shadow">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-book me-2"></i>Günlük İstatistikleri
+                    </h5>
+                </div>
+                <div class="card-body">
+                    @if (userStats != null)
+                    {
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <div class="stat-card bg-info text-white p-3 rounded text-center">
+                                    <i class="fas fa-journal-whills fa-2x mb-2"></i>
+                                    <h4>@userStats.TotalJournalEntries</h4>
+                                    <small>Toplam Günlük Girişi</small>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="stat-card bg-secondary text-white p-3 rounded text-center">
+                                    <i class="fas fa-calendar-day fa-2x mb-2"></i>
+                                    <h4>@(userStats.JournalDates?.Count ?? 0)</h4>
+                                    <small>Günlük Tutulan Gün</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        @if (userStats.LastJournalEntry.HasValue)
+                        {
+                            <div class="alert alert-success">
+                                <i class="fas fa-pen-fancy me-2"></i>
+                                Son günlük girişi: <strong>@userStats.LastJournalEntry.Value.ToString("dd.MM.yyyy")</strong>
+                            </div>
+                        }
+
+                        @if (userStats.JournalDates?.Any() == true)
+                        {
+                            <h6 class="mt-4 mb-3">
+                                <i class="fas fa-calendar-alt me-2"></i>Günlük Tutulan Günler:
+                            </h6>
+                            <div class="journal-dates-container">
+                                @foreach (var date in userStats.JournalDates.TakeLast(20))
+                                {
+                                    <span class="badge bg-light text-dark me-1 mb-1 p-2">
+                                        <i class="fas fa-calendar-check me-1"></i>
+                                        @date.ToString("dd.MM.yyyy")
+                                    </span>
+                                }
+                                @if (userStats.JournalDates.Count > 20)
+                                {
+                                    <span class="badge bg-secondary p-2">
+                                        ve @(userStats.JournalDates.Count - 20) gün daha...
+                                    </span>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="alert alert-warning">
+                                <i class="fas fa-info-circle me-2"></i>
+                                Henüz günlük girişi yapılmamış.
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .stat-card {
+        transition: transform 0.2s;
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-2px);
+    }
+    
+    .profile-avatar {
+        margin-bottom: 1rem;
+    }
+    
+    .journal-dates-container {
+        max-height: 200px;
+        overflow-y: auto;
+        border: 1px solid #dee2e6;
+        border-radius: 0.375rem;
+        padding: 10px;
+        background-color: #f8f9fa;
+    }
+</style>
+
+@code {
+    private UserProfileStatsDto? userStats;
+    private ChangePasswordDto changePasswordModel = new();
+    private string changePasswordMessage = string.Empty;
+    private bool changePasswordSuccess = false;
+    private bool isChangingPassword = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUserStats();
+    }
+
+    private async Task LoadUserStats()
+    {
+        try
+        {
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (user.Identity.IsAuthenticated)
+            {
+                var userIdClaim = user.FindFirst(ClaimTypes.NameIdentifier);
+                if (userIdClaim != null && Guid.TryParse(userIdClaim.Value, out var userId))
+                {
+                    userStats = await ProfileService.GetUserProfileStatsAsync(userId);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading user stats: {ex.Message}");
+        }
+    }
+
+    private async Task ChangePassword()
+    {
+        try
+        {
+            isChangingPassword = true;
+            changePasswordMessage = string.Empty;
+            StateHasChanged();
+
+            var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var user = authState.User;
+
+            if (!user.Identity.IsAuthenticated)
+            {
+                changePasswordMessage = "Kullanıcı kimlik doğrulaması başarısız.";
+                changePasswordSuccess = false;
+                return;
+            }
+
+            var userIdClaim = user.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null || !Guid.TryParse(userIdClaim.Value, out var userId))
+            {
+                changePasswordMessage = "Kullanıcı ID'si alınamadı.";
+                changePasswordSuccess = false;
+                return;
+            }
+
+            var result = await AuthService.ChangePasswordAsync(userId, changePasswordModel);
+            
+            changePasswordSuccess = result.Success;
+            changePasswordMessage = result.Success ? "Şifre başarıyla değiştirildi!" : result.ErrorMessage;
+
+            if (result.Success)
+            {
+                changePasswordModel = new ChangePasswordDto();
+                
+                _ = Task.Delay(3000).ContinueWith(_ =>
+                {
+                    InvokeAsync(() =>
+                    {
+                        changePasswordMessage = string.Empty;
+                        StateHasChanged();
+                    });
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            changePasswordMessage = $"Bir hata oluştu: {ex.Message}";
+            changePasswordSuccess = false;
+        }
+        finally
+        {
+            isChangingPassword = false;
+            StateHasChanged();
+        }
+    }
+} 
